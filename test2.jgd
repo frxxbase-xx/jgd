@@ -1,0 +1,16 @@
+[
+{
+	"id" : "fred",
+	"knows" : [":bob", ":mary"],
+	"name" : "Fred"
+},
+{
+	"id" : "phil",
+	"knows" : [":bob", ":fred"],
+	"name" : "Phil"
+},
+{
+	"id" : "bob",
+	"knows" : ":phil"
+}
+]

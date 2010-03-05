@@ -1,0 +1,29 @@
+Here's where I copy and paste for a python shell, for my demo
+
+pp(ts.MQL([{"name" : null, "type" : "work", "!affiliations": [{"name" : null}] }]))
+
+//Yenta
+pp(ts.MQL( [{
+	"name" : null,
+	"relationship_status" : "Single",
+	"sex" : "female",
+	"mutual_friends" : [{
+		"name" : null,
+		"sex" : "male",
+		"relationship_status" : "Single"
+	}],
+	"id" : null
+}]))
+
+ts.reconcile_foreign_ids_on_prop("name", query=[{"name" : null, "type" : "work", "!affiliations": [{"name" : null}] }], type="/business/company")
+
+pp(ts.MQL( [{
+	"name" : null, 
+	"fb:/business/company/founders": [{"name" : null}],
+	"fb:type": [{"id" : null}], 
+	"!affiliations": [{"name" : null}]
+}]))
+
+ts.reconcile_foreign_ids_on_prop("name", query=[{"name" : null, "type" : "work", "!affiliations": [{"name" : null}] }], type="/business/company")
+
+ts.MQL([{"name" : "Humphrey Bogart", "!/film/performance/actor" : [{"!/film/film/starring" : {"name" : null, "/film/film/starring" : {"/film/performance/actor" : {"name" : "Lauren Bacall"} }}}] }])

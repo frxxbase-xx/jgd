@@ -1,0 +1,10 @@
+# JGD
+JSON Graph Data -- A triple store and query engine for querying small datasets represented as JSON files
+
+## FreebaseAdapter
+
+For using Freebase data:
+	easy_install freebase
+
+## Serving
+For webserver capability, there's [toastdriven's itty project](http://github.com/toastdriven/itty) on GitHub. Include itty in the import path
