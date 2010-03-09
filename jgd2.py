@@ -614,37 +614,48 @@ class TripleStore(object):
 
 null = None
 
-def usage():
-    print "Usage string goes here!"
 if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(title="Subcommands", description="Valid subcommands", help="Additional Help", dest="subcommand")
+
+    parser_load = subparsers.add_parser("load", help="Load a JGD file (for debugging)")
+    parser_load.add_argument("file", type=argparse.FileType('r'), help="JGD file to load")
+    parser_load.add_argument("-s", dest="serialize", action="store_true", default=False, help="Reserialize")
+
+    parser_cat = subparsers.add_parser("cat", help="Join two JGD files")
+    parser_cat.add_argument("file", type=argparse.FileType('r'), metavar="files", nargs="+", help="JGD files to join")
+
+    parser_serve = subparsers.add_parser("serve", help="Start a mini-webserver with a /mqlread entrypoint")
+    parser_serve.add_argument("-u", action="store_true", default=False, help="Universal -- use internal IDs as foreign IDs", dest="universal")
+    parser_serve.add_argument("file", type=argparse.FileType('r'))
+    parser_serve.add_argument("host", nargs="?", default="localhost")
+    parser_serve.add_argument("port", type=int, default=8080)
+
+    options = parser.parse_args()
+
     # Give us a blank store to start. 
     ts = TripleStore()
-    if (len(sys.argv) < 2):
-        usage()
-        sys.exit(-1)
-    if sys.argv[1] == "load":
-        # Load an external json file and add the FreebaseAdapter as "fb"
-        f = open(sys.argv[2], "r")
-        json_data = json.load(f)
-        f.close()
-        ts.load_json(json_data)
-        ts.add_ns_adapter("fb", FreebaseAdapter)
-    elif sys.argv[1] == "serialize":
-        f = open(sys.argv[2], "r")
-        json_data = json.load(f)
-        f.close()
-        ts.load_json(json_data)
-        print json.dumps(ts.serialize(), indent=2)
 
-    elif sys.argv[1] == "cat":
-        for x in sys.argv[2:]:
-            f = open(x, "r")
-            json_data = json.load(f)
-            f.close()
+    if (options.subcommand == "load"):
+        # Load an external json file and add the FreebaseAdapter as "fb"
+        json_data = json.load(options.file)
+        options.file.close()
+        ts.load_json(json_data)
+        if options.serialize:
+            print json.dumps(ts.serialize(), indent=2)
+        else:
+            ts.add_ns_adapter("fb", FreebaseAdapter)
+
+    elif (options.subcommand == "cat"):
+        for x in options.file:
+            json_data = json.load(x)
+            x.close()
             ts.load_json(json_data)
         print json.dumps(ts.serialize(), indent=2)
 
-    elif sys.argv[1].startswith("serve"):
+    elif (options.subcommand == "serve"):
         import itty
         # Load an external json file, add the FreebaseAdapter as "fb", and
         # run the itty server to become HTTP-able
@@ -659,12 +670,11 @@ if __name__ == "__main__":
 
             return itty.Response( json.dumps(response),content_type="application/json")
 
-        f = open(sys.argv[2], "r")
-        jsondata = json.load(f)
-        f.close()
+        jsondata = json.load(options.file)
+        options.file.close()
         ts.load_json(jsondata)
-        if sys.argv[1] == "serveu":
+        if options.universal:
             ts.add_ns_adapter("fb", FreebaseAdapter, universal=True)
         else:
             ts.add_ns_adapter("fb", FreebaseAdapter)
-        itty.run_itty(host=sys.argv[3], port=int(sys.argv[4]))
+        itty.run_itty(host=options.host, port=options.port)
