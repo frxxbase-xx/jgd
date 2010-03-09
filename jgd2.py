@@ -622,23 +622,7 @@ if __name__ == "__main__":
     if (len(sys.argv) < 2):
         usage()
         sys.exit(-1)
-    if sys.argv[1] == "test":
-        # A simple graph with generic names based on my reality. Used for a simple test.
-        # Also shows "correct" usage patterns
-        b = ts.add_node("bob")
-        e = ts.add_node("emily")
-        m = ts.add_node("matt")
-        ts.add_link((b, "knows", e))
-        ts.add_link((m, "knows", e))
-        r = ts.add_node("brandon")
-        ts.add_link((m, "knows", r))
-        ts.add_link((e, "dates", r))
-        ts.add_link((r, "dates", e))
-#ts.MQL({"id" : None, "dates" : ":brandon"})
-        print ts.MQL({"id" : None, "knows" : [{"id" : None, "dates" : ":brandon"}]})
-        print ts.MQL({"id" : None, "knows" : [{"id" : None, "dates" : None}]})
-        print ts.MQL({"id" : None, "knows" : [{"id" : None, "dates" : ":emily"}]})
-    elif sys.argv[1] == "load":
+    if sys.argv[1] == "load":
         # Load an external json file and add the FreebaseAdapter as "fb"
         f = open(sys.argv[2], "r")
         json_data = json.load(f)
