@@ -149,7 +149,7 @@ class TripleStore(object):
             id = ":%s" % id
         if id not in self.ids:
             self.ids[id] = self.id_printer
-            self.nodes[self.id_printer] = { "ids" : [id], "links" : {}, "literal_links" : {} "reverse_links" : {} }
+            self.nodes[self.id_printer] = { "ids" : [id], "links" : {}, "literal_links" : {}, "reverse_links" : {} }
             self.id_printer += 1
             self.primitive_count += 1
         return id
@@ -173,6 +173,9 @@ class TripleStore(object):
             self.add_link(tup)
             count += 1
         return count
+
+    def reify(self, prop, to_prop, query):
+        pass
 
     def iterate_triples_for_id(self, id):
         pass
@@ -310,18 +313,9 @@ class TripleStore(object):
 
         def serialize_node(nn):
             this_data = {}
-            for key in self.nodes[nn]["links"]:
-                index = self.nodes[nn]["links"][key]
-                d = []
-                for x in index:
-                    d.append(pre_serialize_node(nn, key, x))
-                if len(d) == 1:
-                    d = d[0]
-                this_data[key] = d
-
             for key in self.nodes[nn]["literal_links"]:
                 index = self.nodes[nn]["literal_links"][key]
-                d = index.copy()
+                d = list(index)
                 if len(d) == 1:
                     d = d[0]
                 this_data[key] = d
@@ -337,6 +331,15 @@ class TripleStore(object):
                         this_data["%s:id" % ns] = tid
 
             done_nodes[nn] = True
+            for key in self.nodes[nn]["links"]:
+                index = self.nodes[nn]["links"][key]
+                d = []
+                for x in index:
+                    d.append(pre_serialize_node(nn, key, x))
+                if len(d) == 1:
+                    d = d[0]
+                this_data[key] = d
+
             all_nodes.remove(nn)
 
             return this_data
@@ -730,7 +733,4 @@ if __name__ == "__main__":
             if cancel:
                 continue
             writer.writerow(r)
-
-                        
-
 
