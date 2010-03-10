@@ -138,7 +138,7 @@ class TripleStore(object):
             if o not in self.literals:
                 self.literals[unicode(o)] = {}
             self.add_to_index(self.literals[unicode(o)], p, s)
-            self.add_to_index(self.nodes[s]["links"], p, unicode(o))
+            self.add_to_index(self.nodes[s]["literal_links"], p, unicode(o))
             self.add_to_index(self.literal_predicates, p, (s, unicode(o)))
         self.primitive_count += 1
 
@@ -149,7 +149,7 @@ class TripleStore(object):
             id = ":%s" % id
         if id not in self.ids:
             self.ids[id] = self.id_printer
-            self.nodes[self.id_printer] = { "ids" : [id], "links" : {}, "reverse_links" : {} }
+            self.nodes[self.id_printer] = { "ids" : [id], "links" : {}, "literal_links" : {} "reverse_links" : {} }
             self.id_printer += 1
             self.primitive_count += 1
         return id
@@ -173,6 +173,24 @@ class TripleStore(object):
             self.add_link(tup)
             count += 1
         return count
+
+    def iterate_triples_for_id(self, id):
+        pass
+
+    def remove_link(self, triple):
+        s, p, o = triple
+        return
+
+    def merge(self, from_id, to_id):
+        if from_id not in self.ids or to_id not in self.ids:
+            raise IDException()
+        from_nn = self.ids[from_id]
+        to_nn = self.ids[to_id]
+        if from_nn == to_nn:
+            return
+        #Move each link, carefully. 
+        #Move each ID
+
 
     # Use external reconciliation based on a given property (eg, name, and using api/service/search)
     def reconcile_foreign_ids_on_prop(self, prop, ns=None, query=None, **args):
@@ -296,10 +314,14 @@ class TripleStore(object):
                 index = self.nodes[nn]["links"][key]
                 d = []
                 for x in index:
-                    if type(x) == type(3):
-                        d.append(pre_serialize_node(nn, key, x))
-                    else:
-                        d.append(x)
+                    d.append(pre_serialize_node(nn, key, x))
+                if len(d) == 1:
+                    d = d[0]
+                this_data[key] = d
+
+            for key in self.nodes[nn]["literal_links"]:
+                index = self.nodes[nn]["literal_links"][key]
+                d = index.copy()
                 if len(d) == 1:
                     d = d[0]
                 this_data[key] = d
@@ -502,21 +524,22 @@ class TripleStore(object):
                         data[pred] = node["ids"][0]
                         continue
                     forelinks = node["links"].get(pred)
-                    if forelinks is None:
-                        data[pred] = None
-                    else:
-                        if type(forelinks[0]) == type(3):
+                    if forelinks is not None:
                         #ids
-                            if len(forelinks) == 1:
-                                data[pred] = self.nodes[forelinks[0]]["ids"][0]
-                            else:
-                                data[pred] = [self.nodes[x]["ids"][0] for x in forelinks]
+                        if len(forelinks) == 1:
+                            data[pred] = self.nodes[forelinks[0]]["ids"][0]
                         else:
+                            data[pred] = [self.nodes[x]["ids"][0] for x in forelinks]
+                        continue
+                    forelinks = node["literal_links"].get(pred)
+                    if forelinks is not None:
                         #strs
-                            if len(forelinks) == 1:
-                                data[pred] = forelinks[0]
-                            else:
-                                data[pred] = [x for x in forelinks]
+                        if len(forelinks) == 1:
+                            data[pred] = forelinks[0]
+                        else:
+                            data[pred] = [x for x in forelinks]
+                        continue
+                    data[pred] = None
                 else:
                     raise QueryException()
 
