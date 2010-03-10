@@ -633,6 +633,12 @@ if __name__ == "__main__":
     parser_serve.add_argument("host", nargs="?", default="localhost")
     parser_serve.add_argument("port", type=int, default=8080)
 
+    parser_csv = subparsers.add_parser("csv", help="Tabulate data based on properties")
+    parser_csv.add_argument("--require", "-r", dest="require", default=False, action="store_true", help="Require all fields to be filled")
+    parser_csv.add_argument("-q", "--query", dest="query_json", help="Query to limit results by")
+    parser_csv.add_argument("file", type=argparse.FileType('r'))
+    parser_csv.add_argument("columns", nargs="+")
+
     options = parser.parse_args()
 
     # Give us a blank store to start. 
@@ -678,3 +684,30 @@ if __name__ == "__main__":
         else:
             ts.add_ns_adapter("fb", FreebaseAdapter)
         itty.run_itty(host=options.host, port=options.port)
+    elif (options.subcommand == "csv"):
+        import csv
+        jsondata = json.load(options.file)
+        options.file.close()
+        ts.load_json(jsondata)
+        if options.query_json:
+            q = json.loads(options.query_json)
+        else:
+            q = [{}]
+        for key in options.columns:
+            q[0][key] = None
+        results = ts.MQL(q)
+        writer = csv.DictWriter(sys.stdout, options.columns, extrasaction="ignore")
+        for r in results:
+            cancel = False
+            for k in options.columns:
+                if r[k] is None:
+                    cancel = options.require
+                    continue
+                r[k] = unicode(r[k]).encode("utf-8")
+            if cancel:
+                continue
+            writer.writerow(r)
+
+                        
+
+
