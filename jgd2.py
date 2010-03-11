@@ -126,15 +126,18 @@ class TripleStore(object):
         if not s in self.ids:
             raise TripleException()
         s = self.ids[s]
-        if p in self.nodes[s]["links"]:
-            if o in self.nodes[s]["links"][p]:
-                return
         if o in self.ids:
+            if p in self.nodes[s]["links"]:
+                if o in self.nodes[s]["links"][p]:
+                    return
             self.add_to_index(self.nodes[self.ids[o]]["reverse_links"], p, s)
             self.add_to_index(self.nodes[s]["links"], p, self.ids[o])
             self.add_to_index(self.predicates, p, (s, self.ids[o]))
         else:
             # o is literal
+            if p in self.nodes[s]["literal_links"]:
+                if o in self.nodes[s]["literal_links"][p]:
+                    return
             if o not in self.literals:
                 self.literals[unicode(o)] = {}
             self.add_to_index(self.literals[unicode(o)], p, s)
