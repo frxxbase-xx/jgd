@@ -127,12 +127,13 @@ class TripleStore(object):
             raise TripleException()
         s = self.ids[s]
         if o in self.ids:
+            o_nn = self.ids[o]
             if p in self.nodes[s]["links"]:
-                if o in self.nodes[s]["links"][p]:
+                if o_nn in self.nodes[s]["links"][p]:
                     return
-            self.add_to_index(self.nodes[self.ids[o]]["reverse_links"], p, s)
-            self.add_to_index(self.nodes[s]["links"], p, self.ids[o])
-            self.add_to_index(self.predicates, p, (s, self.ids[o]))
+            self.add_to_index(self.nodes[o_nn]["reverse_links"], p, s)
+            self.add_to_index(self.nodes[s]["links"], p, o_nn)
+            self.add_to_index(self.predicates, p, (s, o_nn))
         else:
             # o is literal
             if p in self.nodes[s]["literal_links"]:
@@ -177,21 +178,70 @@ class TripleStore(object):
             count += 1
         return count
 
-    def reify(self, prop, to_prop, query=[{}]):
+    def reify(self, prop, to_prop, query={}):
+        if type(query) == type([]):
+            query = query[0]
         out_set, out_data = self.__filter(query)
         for nn in out_set:
             if prop in self.nodes[nn]["literal_links"]:
                 for x in self.nodes[nn]["literal_links"][prop]:
                     target_id = self.__generate_id()
-                    newnode = self.add_node()
+                    newnode = self.add_node(target_id)
                     self.remove_link((self.nodes[nn]["ids"][0], prop, x))
-                    self.add_link((self.nodes[nn]["ids"][0], prop, target_id))
+                    self.add_link((self.nodes[nn]["ids"][0], prop, newnode))
+                    self.add_link((newnode, to_prop, x))
 
-    def iterate_triples_for_id(self, id):
-        pass
+    def generate_triples_for_id(self, id):
+        nn = self.ids[id]
+        for prop in self.nodes[nn]["links"]:
+            for x in self.nodes[nn]["links"][prop]:
+                yield (id, prop, self.nodes[x]["ids"][0])
+        for prop in self.nodes[nn]["literal_links"]:
+            for x in self.nodes[nn]["literal_links"][prop]:
+                yield (id, prop, x)
+        return
+
+
 
     def remove_link(self, triple):
         s, p, o = triple
+        if not s in self.ids:
+            raise TripleException()
+        s_nn = self.ids[s]
+        if o in self.ids:
+            o_nn = self.ids[o]
+            # target is a link
+            if p not in self.nodes[s_nn]["links"]:
+                return
+            if o_nn not in self.nodes[s_nn]["links"][p]:
+                return
+            self.nodes[s_nn]["links"][p].remove(o_nn)
+            if len(self.nodes[s_nn]["links"][p]) == 0:
+                del self.nodes[s_nn]["links"][p]
+            self.nodes[o_nn]["reverse_links"][p].remove(s_nn)
+            if len(self.nodes[o_nn]["reverse_links"][p]) == 0:
+                del self.nodes[o_nn]["reverse_links"][p]
+            self.predicates[p].remove((s_nn, o_nn))
+            if len(self.predicates[p]) == 0:
+                del self.predicates[p]
+        else:
+            o = unicode(o)
+            # target is a literal
+            if p not in self.nodes[s_nn]["literal_links"]:
+                return
+            if o not in self.nodes[s_nn]["literal_links"][p]:
+                return
+            self.nodes[s_nn]["literal_links"][p].remove(o)
+            if len(self.nodes[s_nn]["literal_links"][p]) == 0:
+                del self.nodes[s_nn]["literal_links"][p]
+            self.literals[o][p].remove(s_nn)
+            if len(self.literals[o][p]) == 0:
+                del self.literals[o][p]
+            if len(self.literals[o]) == 0:
+                del self.literals[o]
+            self.literal_predicates[p].remove((s_nn, o))
+            if len(self.literal_predicates[p]) == 0:
+                del self.literal_predicates[p]
         return
 
     def merge(self, from_id, to_id):
