@@ -177,8 +177,15 @@ class TripleStore(object):
             count += 1
         return count
 
-    def reify(self, prop, to_prop, query):
-        pass
+    def reify(self, prop, to_prop, query=[{}]):
+        out_set, out_data = self.__filter(query)
+        for nn in out_set:
+            if prop in self.nodes[nn]["literal_links"]:
+                for x in self.nodes[nn]["literal_links"][prop]:
+                    target_id = self.__generate_id()
+                    newnode = self.add_node()
+                    self.remove_link((self.nodes[nn]["ids"][0], prop, x))
+                    self.add_link((self.nodes[nn]["ids"][0], prop, target_id))
 
     def iterate_triples_for_id(self, id):
         pass
@@ -585,7 +592,7 @@ class TripleStore(object):
 
 
     # Load a graph based on the results from json.load(file)
-    def __generate_json_id(self):
+    def __generate_id(self):
         self.__json_id += 1
         return str(self.__json_id)
 
@@ -602,7 +609,7 @@ class TripleStore(object):
         if "id" in json:
             node = self.add_node(unicode(json["id"]))
         else:
-            node = self.add_node(self.__generate_json_id())
+            node = self.add_node(self.__generate_id())
 
         for k, v in json.iteritems():
             t = self.ns_split_id(k)
