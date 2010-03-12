@@ -672,7 +672,7 @@
         this.__json_id = 0;
         if (isArray(json))
             for (var x in json)
-                this.__json_load_helper(x);
+                this.__json_load_helper(json[x]);
         else if (getType(json) === "object")
             this.__json_load_helper(json);
     }
@@ -705,7 +705,7 @@
                         else if (isArray(target))
                             throw new Error('JSONLoadException()');
                         else {
-                            if (target.startswith(":"))
+                            if (target.charAt(0) === ":")
                                 target = this.add_node(target)
                             this.add_link([node, k, target])
                         }
