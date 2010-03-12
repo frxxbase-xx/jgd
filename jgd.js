@@ -1,9 +1,17 @@
 //warning: completely and totally untested, translated by hand from Python
-var require = this.require || function(module){};
-var sys = require("sys");
 
-
-(function() {
+(function(toplevel) {
+    var debug;
+    try {
+        var sys = require('sys');
+        debug = function(msg) {sys.puts(msg);}
+    } catch(e) {}
+    if (debug === undefined && 'console' in toplevel && toplevel.console.log)
+            debug = function(msg) {toplevel.console.log(msg);}
+    if (debug === undefined) debug = function(){};
+    
+    var exports = 'exports' in toplevel ? toplevel.exports : toplevel;
+    
     //various needed convenience functions
     function isArray(obj) {
 		return Object.prototype.toString.call(obj) === "[object Array]";
@@ -188,7 +196,7 @@ var sys = require("sys");
         var args = Array.prototype.slice.call(arguments,3);
 
         if (prop === "id") {
-            sys.puts("Temporarily unsupported")
+            debug("Temporarily unsupported")
 //          XXX Todo: look up the id in the ids index
             return 0;
         }
@@ -196,7 +204,7 @@ var sys = require("sys");
         var predlinks = this.literal_predicates[prop]
  
         if (predlinks === undefined){
-            sys.puts("No literal predicate by that name");
+            debug("No literal predicate by that name");
 //          XXX Todo: use the id of the thing if in this.predicates
             return 0;
         }
@@ -723,5 +731,5 @@ var sys = require("sys");
         
         return node;
     }
- 
-})()
+    exports.TripleStore = TripleStore;
+})(this)
