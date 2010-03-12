@@ -44,10 +44,8 @@
         return "object";
     }
     
-    /** @constructor 
-      * @param {...*} var_args the initial elements of the set
-      */
-    var Set = function(var_args) {
+    /** @constructor */
+    var Set = function(arr) {
         var set = {};
         this.add = function(val) {set[val] = true;};
         this.addAll = function(array) {
@@ -58,7 +56,8 @@
         this.contains = function(val) {return val in set;};
         //getAll only valid for 
         this.getAll = function() {var all = []; for (var val in set) all.push(val); return all;};
-        this.addAll(arguments);
+        if (isArray(arr))
+            this.addAll(arr);
     }
     
     function NullAdapter(universal) {}
@@ -409,8 +408,8 @@
         var foreign_keys = false
         var id_data = {}
         var index = null;
-        for (var item in q.iteritems()) {
-            var pred = item[0]; var target = item[1];
+        for (var pred in q) {
+            var target = q[pred];
             var reverse = false
             var this_intermediate = new Set()
             if (pred.charAt(0) ==="!") {
@@ -490,8 +489,8 @@
         // This is the block needed to call out into an adapter. Could be taken out
         // to simplify the MQL implementation
         if (foreign_keys) {
-            for (var pred_target in q.iteritems()) {
-                var pred = pred_target[0]; var target = pred_target[1];
+            for (var pred in q) {
+                var target = q[pred];
                 reverse = false
                 if (pred.startswith("!")) {
                     reverse = true
@@ -559,12 +558,14 @@
     TripleStore.prototype.__annotate = function(q, out_set, out_data) {
         var output = []
         var foreign_keys = false
-        for (var x in out_set) {
+        var out_array = out_set.getAll();
+        for (var idx in out_array) {
+            var x = out_array[idx];
             var data = {}
             var node = this.nodes[x]
             var filter_data = out_data[x]
-            for (var pred_target in q.iteritems()){
-                var pred = pred_target[0]; var target = pred_target[1];
+            for (var pred in q){
+                var target = q[pred];
                 if (this.ns_split_id(pred) != null) {
                     foreign_keys = true;
                     continue;
@@ -619,8 +620,8 @@
         // This is the block needed to call out into an adapter. Could be taken out
         // to simplify the MQL implementation
             if (foreign_keys) {
-                for (var pred_target in q.iteritems()) {
-                    var pred = pred_target[0]; var target = pred_target[1];
+                for (var pred in q()) {
+                    var target = q[pred];
                     var reverse = false;
                     var barepred = pred;
                     if (barepred.charAt(0) === "!") {
