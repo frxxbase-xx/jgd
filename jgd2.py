@@ -704,7 +704,6 @@ class TripleStore(object):
 
     @print_timing
     def load_json(self, json):
-        self.__json_id = 0;
         if type(json) == type([]):
             for x in json:
                 self.__json_load_helper(x)
