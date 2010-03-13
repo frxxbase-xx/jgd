@@ -28,6 +28,42 @@
         for (var key in obj) keys.push(key);
         return keys;
     }
+    
+    //for compatability
+    function pyForEach(val, onEach) {
+        switch(getType(val)) {
+            case "array": 
+                for (var i = 0; i < val.length; i++)
+                    onEach(val[i], i);
+                break;
+            case "object":
+                if (val instanceof Set){
+                    pyForEach(val.getAll(), onEach);
+                    return;
+                }
+                for (var key in val)
+                    onEach(key, val[key]);
+                break;
+            default:
+                throw new Error("pyForEach doesn't know how to iterate over a " + getType(val));
+        }
+    }
+    
+    function pyIn(val, container) {
+        switch(getType(container)) {
+            case "object": 
+                if (container instanceof Set)
+                    return container.contains(val);
+                return (val in container);
+            case "array":
+                for (var i = 0; i < container.length; i++)
+                    if (val === container[i])
+                        return true
+                return false;
+            default:
+                throw new Error("pyIn doesn't know how to detect containment in a " + getType(val) + " pyIn("+JSON.stringify(val)+", "+JSON.stringify(container)+")");
+        }
+    }
 
     /**
       @return {string} 
@@ -44,7 +80,9 @@
         return "object";
     }
     
-    /** @constructor */
+    /** @constructor 
+      * @param {Array=} arr
+      */
     var Set = function(arr) {
         var set = {};
         this.add = function(val) {set[val] = true;};
@@ -56,6 +94,7 @@
         this.contains = function(val) {return val in set;};
         //getAll only valid for 
         this.getAll = function() {var all = []; for (var val in set) all.push(val); return all;};
+        this.toJSON = function() {return set}
         if (isArray(arr))
             this.addAll(arr);
     }
@@ -69,17 +108,35 @@
     /** @constructor */
     function TripleStore() {
         //all of the indices
+        /** @type Object.<string,number> */
         this.ids = {};
+        /** @type Object.<string,Object.<string,number>>*/
         this.ns_ids = {};
+        /** @type Object.<string,Array.<Array>>*/
         this.predicates = {};
+        /** @type Object.<string,Array.<Array>> */
         this.literal_predicates = {};
+        /** @type Object.<string,Array.<Array>> */
         this.literals = {};
+        /** @type number */
         this.id_printer = 0;
+        /** @type Object.<number, GraphNode>*/
         this.nodes = {};
+        /** @type Object.<string, Adapter> */
         this.ns = {};
+        /** @type number*/
         this.primitive_count = 0;
+        /** @type number*/
         this.__json_id = 0;
     }
+    
+    /** GraphNode
+        {"ids": Array.<number>,
+         "links": Object.<string, Array.<number>>},
+         "literal_links": Object.<string, Array.<string>>,
+         "reverse_links": Object.<string, Array.<number>>},
+        }
+    */
     
     TripleStore.prototype.add_to_index = function(index, key, value) {
         index[key] = index[key] || [];
@@ -87,7 +144,7 @@
     }
     
     TripleStore.prototype.is_id = function(id) {
-        return id in this.ids;
+        return pyIn(id, this.ids);
     }
     
     TripleStore.prototype.get_id = function(nodenum) {
@@ -97,7 +154,7 @@
     TripleStore.prototype.is_ns_prop = function(prop) {
         var l = prop.split(":");
         if (l.length >= 2)
-            if (l[0] in this.ns)
+            if (pyIn(l[0], this.ns))
                 return true;
         return false;
     }
@@ -105,37 +162,36 @@
 //  Add a tuple. Triple is [subject_id, "predicate", object_id]
     TripleStore.prototype.add_link = function(triple) {
         var s = triple[0]; var p = triple[1]; var o = triple[2];
-        if (!(s in this['ids']))
+        if (!pyIn(s, this['ids']))
             throw new Error("TripleException"); //FIXME
         s = this.ids[s];
-        if (o in this.ids) {
-            if (p in this.nodes[s].links) {
-                if (o in this.nodes[s].links[p])
+        if (pyIn(o, this.ids)) {
+            if (pyIn(p, this.nodes[s].links))
+                if (pyIn(o, this.nodes[s].links[p]))
                     return
-                this.add_to_index(this.nodes[this.ids[o]].reverse_links, p, s);
-                this.add_to_index(this.nodes[s].links, p, this.ids[o]);
-                this.add_to_index(this.predicates, p, [s, this.ids[o]]);
-            }
-            else {
-                //o is a literal
-                if (p in this.nodes[s].literal_links)
-                    if (o in this.nodes[s].literal_links[p])
-                        return
-                if (!(o in this.literals))
-                    this.literals[o] = {};
-                this.add_to_index(this.literals[o], p, s);
-                this.add_to_index(this.nodes[s].literal_links, p, o);
-                this.add_to_index(this.literal_predicates, p, [s, o]);
-            }
-            this.primitive_count++;
+            this.add_to_index(this.nodes[this.ids[o]].reverse_links, p, s);
+            this.add_to_index(this.nodes[s].links, p, this.ids[o]);
+            this.add_to_index(this.predicates, p, [s, this.ids[o]]);
         }
+        else {
+            //o is a literal
+            if (pyIn(p, this.nodes[s].literal_links))
+                if (pyIn(o, this.nodes[s].literal_links[p]))
+                    return
+            if (!pyIn(o, this.literals))
+                this.literals[o] = {};
+            this.add_to_index(this.literals[o], p, s);
+            this.add_to_index(this.nodes[s].literal_links, p, o);
+            this.add_to_index(this.literal_predicates, p, [s, o]);
+        }
+        this.primitive_count++;
     }
 //  Add a node. Returns the node id.
     TripleStore.prototype.add_node = function(id) {
         id = id + "";
         if (id.charAt(0) !== ":")
             id = ":" + id;
-        if (!(id in this.ids)) {
+        if (!pyIn(id, this.ids)) {
             this.ids[id] = this.id_printer;
             this.nodes[this.id_printer] = { "ids" : [id], "links" : {}, "literal_links" : {}, "reverse_links" : {} }
             this.id_printer += 1
@@ -148,12 +204,13 @@
     TripleStore.prototype.add_ns_adapter = function(ns, adapter_class, universal) {
         if (universal === undefined) universal = false;
         this.ns[ns] = new adapter_class(universal);
-        if (!(ns in this.ns_ids))
+        if (!pyIn(ns, this.ns_ids))
             this.ns_ids[ns] = {};
     }
 
 //  Add data to a query result set 
     TripleStore.prototype.assert_pred_on_query = function(query, pred, target) {
+        var self = this;
         var is_list = false;
         var count = 0;
         if (isArray(query)) {
@@ -162,11 +219,11 @@
         }
         var results = this.__filter(query);
         var result_ids = results[0]; var result_data = results[1];
-        for (var i in result_ids) {
+        pyForEach(result_ids, function(i) {
             var tup = [this.get_id(i), pred, target];
-            this.add_link(tup);
+            self.add_link(tup);
             count++;            
-        }
+        });
         return count
     }
 
@@ -178,7 +235,7 @@
     }
 
     TripleStore.prototype.merge = function(from_id, to_id) {
-        if (!(from_id in this.ids) || !(to_id in this.ids))
+        if (!pyIn(from_id, this.ids) || !pyIn(to_id, this.ids))
             throw new Error("IDException");
         var from_nn = this.ids[from_id];
         var to_nn = this.ids[to_id];
@@ -192,6 +249,7 @@
     TripleStore.prototype.reconcile_foreign_ids_on_prop = function(prop, ns, query) {
         if (ns === undefined) ns = null;
         if (query === undefined) query = null;
+        var self = this;
         var args = Array.prototype.slice.call(arguments,3);
 
         if (prop === "id") {
@@ -225,19 +283,19 @@
         }
 
         var n_ids = 0
-        for (var link in predlinks) {
+        pyForEach(predlinks, function(link) {
             var sub = link[0]; var obj = link[1];
-            if (filterlist !== null && !(sub in filterlist))
-                continue
-            for (var namespace in nslist) {
+            if (filterlist !== null && !pyIn(sub, filterlist))
+                return //read as continue
+            pyForEach(nslist, function(namespace) {
                 var ns_obj = this.ns[namespace]
                 var id_out = ns_obj.get_id.apply(ns_obj, [obj].concat(args))
                 if (id_out !== null) {
-                    this.__add_ns_id_for_node(namespace, id_out, sub)
+                    self.__add_ns_id_for_node(namespace, id_out, sub)
                     n_ids += 1
                 }
-            }
-        }
+            })
+        })
         return n_ids;
     }
 
@@ -252,43 +310,44 @@
 
     TripleStore.prototype.ids_in_namespace = function(ns, nums){
         var out = [];
+        var self = this;
         if (nums === undefined) {
             if (this.ns[ns].universal)
                 nums = getKeys(this.nodes);
             else
                 nums = getKeys(this.ns_ids[ns]);
         }
-        for (var n in nums) {
-            if (!(n in this.ns_ids[ns])) {
-                if (this.ns[ns].universal) {
-                    for (var key in this.nodes[n]["ids"]) {
-                        var t = this.ns_split_id(key);
+        pyForEach(nums, function(n) {
+            if (!pyIn(n, self.ns_ids[ns])) {
+                if (self.ns[ns].universal) {
+                    pyForEach(self.nodes[n]["ids"], function(key) {
+                        var t = self.ns_split_id(key);
                         if (t === null)
                             out.push([n, key.substring(1)]);
-                    }
+                    })
                 }
-                continue;
+                return;
             }
-            for (var key in this.ns_ids[ns][n]) {
-                var split_id = this.ns_split_id(key);
+            pyForEach(self.ns_ids[ns][n], function(key) {
+                var split_id = self.ns_split_id(key);
                 ns = split_id[0]; var v = split_id[1];
                 out.push([n, v])
-            }
-        }
+            })
+        })
         return out
     }
 
     TripleStore.prototype.__add_ns_id_for_node = function(ns, id, nodenum) {
         id = id + "";
         ns = ns + "";
-        if (!(ns in this.ns))
+        if (!pyIn(ns, this.ns))
             throw new Error("IDException");
         if (id.charAt(0) !== ":")
             id = ":" + id;
         var ns_id = ":" + ns + id;
-        if (ns_id in this.ids)
+        if (pyIn(ns_id, this.ids))
             return ns_id;
-        if (nodenum in this.nodes) {
+        if (pyIn(nodenum, this.nodes)) {
             this.nodes[nodenum]["ids"].push(ns_id);
             this.ids[ns_id] = nodenum;
             this.add_to_index(this.ns_ids[ns], nodenum, ns_id);
@@ -301,7 +360,8 @@
  
     TripleStore.prototype.__node_id_in_ns = function(ns, nodenum) {
         var idlist = this.nodes[nodenum]["ids"]
-        for (var id in idlist) {
+        for (var x in idlist) {
+            var id = idlist[x];
             var l = id.split(":")
             if (l.length < 3)
                 continue;
@@ -326,24 +386,26 @@
         function pre_serialize_node(s, p, o) {
             var rl = self.nodes[o]["reverse_links"];
             var count = 0;
-            for (var p in rl)
-                for (var l in rl[p])
+            pyForEach(rl, function(p) {
+                pyForEach(rl[p], function(l) {
                     count += 1;
-            if (count === 1 && !(o in done_nodes))
+                })
+            })
+            if (count === 1 && !pyIn(o, done_nodes))
                 return serialize_node(o);
             return self.nodes[o]["ids"][0];
         }
         function serialize_node(nn) {
             var this_data = {};
-            for (var key in self.nodes[nn]["literal_links"]) {
+            pyForEach(self.nodes[nn]["literal_links"], function(key) {
                 var index = self.nodes[nn]["literal_links"][key];
                 var d = toArray(index);
                 if (d.length == 1)
                     d = d[0];
                 this_data[key] = d;
-            }
+            })
             
-            for (var id in self.nodes[nn]["ids"]) {
+            pyForEach(self.nodes[nn]["ids"], function(id) {
                 var t = self.ns_split_id(id)
                 if (t === null) {
                     if (this_data["id"] === undefined)
@@ -354,18 +416,19 @@
                     if (this_data[ns+":id"] === undefined) 
                         this_data[ns+":id"] = tid;
                 }
-            }
+            })
             
             done_nodes[nn] = true
-            for (var key in self.nodes[nn]["links"]) {
+            pyForEach(self.nodes[nn]["links"], function(key) {
                 var index = self.nodes[nn]["links"][key];
                 var d = [];
-                for (var x in index)
+                pyForEach(index, function(x) {
                     d.push(pre_serialize_node(nn, key, x));
+                })
                 if (d.length === 1)
                     d = d[0];
                 this_data[key] = d;
-            }
+            })
             all_nodes.remove(nn);
 
             return this_data;
@@ -408,6 +471,7 @@
         var foreign_keys = false
         var id_data = {}
         var index = null;
+        var self = this;
         for (var pred in q) {
             var target = q[pred];
             var reverse = false
@@ -416,7 +480,7 @@
                 reverse = true;
                 pred = pred.substring(1);
             }
-            if (this.ns_split_id(pred) !== null) {
+            if (self.ns_split_id(pred) !== null) {
                 foreign_keys = true
                 continue;
             }
@@ -427,48 +491,49 @@
                 if (pred === "id") {
                     if (reverse)
                         throw new Error('QueryError("ID cannot be reversed")');
-                    if (this.ids[target] !== undefined)
-                        this_intermediate = new Set([this.ids[target]]);
+                    if (self.ids[target] !== undefined)
+                        this_intermediate = new Set([self.ids[target]]);
                     else
                         return [new Set(), {}];
                 }
                 else {
-                    if (this.is_id(target)) {
-                        index = this.nodes[this.ids[target]]["reverse_links"][pred]
+                    if (self.is_id(target)) {
+                        index = self.nodes[self.ids[target]]["reverse_links"][pred]
                         if (reverse)
-                            index = this.nodes[this.ids[target]]["links"][pred];
+                            index = self.nodes[self.ids[target]]["links"][pred];
                     }
                     else {
                         if (reverse)
                             throw new Error('QueryError("Literal cannot be reversed")');
-                        index = this.literals[target];
+                        index = self.literals[target];
                         if (index !== undefined)
                             index = index[pred];
                     }
                     if (index === undefined)
                         return [new Set(), {}];
-                    for (var id in index)
+                    pyForEach(index, function(id) {
                         this_intermediate.add(id);
+                    })
                 }
             }
             if (isArray(target))
                 target = target[0];
             if (getType(target) === "object") {
-                if (!(pred in this.predicates))
+                if (!pyIn(pred, self.predicates))
                     return [new Set(), {}]
-                var sub_obj = this.predicates[pred];
-                var filtered = this.__filter(target);
+                var sub_obj = self.predicates[pred];
+                var filtered = self.__filter(target);
                 var linkage_ids = filtered[0]; var linkage_data = filtered[1];
                 if (reverse)
                     pred = "!" + pred;
-                for (var s_o in sub_obj) {
+                pyForEach(sub_obj, function(s_o) {
                     var s = s_o[0]; var o = s_o[1];
                     if (reverse) {
                         var o_temp = s;
                         s = o;
                         o = o_temp;
                     }
-                    if (o in linkage_ids) {
+                    if (pyIn(o, linkage_ids)) {
                         this_intermediate.add(s)
                         if (id_data[s] === undefined)
                             id_data[s] = {}
@@ -476,7 +541,7 @@
                             id_data[s][pred] = {}
                         id_data[s][pred][o] = linkage_data[o]
                     }
-                }
+                })
             }
             if (final_ids == null)
                 final_ids = this_intermediate;
@@ -513,8 +578,9 @@
                         else
                             throw new Error('QueryException()');
                         var selected_ids = new Set();
-                        for (var x in fid_list)
+                        pyForEach(fid_list, function(x) {
                             selected_ids.add(this.ids[":" + ns + ":" + x]);
+                        })
                         // how could x ever be None here? [x for x in selected_ids if x is not None]
                         if (final_ids == null)
                             final_ids = selected_ids
@@ -524,7 +590,7 @@
                     continue;
                 }
 
-                var adapter = this.ns[ns]
+                var adapter = self.ns[ns]
                 var ids_data = adapter.filter(predicate, working_ids, target, reverse=reverse);
                 var ids = ids_data[0]; var adapter_data = ids_data[1];
                 if (reverse)
@@ -535,19 +601,20 @@
                     final_ids = final_ids.intersection(ids);
                 if (final_ids.length == 0)
                     return (new Set(), {})
-                for (var x in final_ids) {
+                pyForEach(final_ids, function(x) {
                     if (id_data[x] === undefined)
                         id_data[x] = {}
                     id_data[x][pred] = adapter_data[x];
-                }
+                })
             }
         }
         
         var data_out = {};
         if (final_ids == null)
             final_ids = new Set(getKeys(this.nodes));
-        for (var x in final_ids)
+        pyForEach(final_ids, function(x) {
             data_out[x] = id_data[x];
+        })
         return [final_ids, data_out];
     }
 
@@ -558,17 +625,16 @@
     TripleStore.prototype.__annotate = function(q, out_set, out_data) {
         var output = []
         var foreign_keys = false
-        var out_array = out_set.getAll();
-        for (var idx in out_array) {
-            var x = out_array[idx];
+        var self = this;
+        pyForEach(out_set, function(x) {
             var data = {}
-            var node = this.nodes[x]
+            var node = self.nodes[x]
             var filter_data = out_data[x]
-            for (var pred in q){
+            pyForEach(q, function(pred) {
                 var target = q[pred];
-                if (this.ns_split_id(pred) != null) {
+                if (self.ns_split_id(pred) != null) {
                     foreign_keys = true;
-                    continue;
+                    return;
                 }
                 if (getType(target) === "string" || getType(target) === "number")
                     data[pred] = target
@@ -576,31 +642,32 @@
                     if (filter_data[pred] == null)
                         data[pred] = []
                     else
-                        data[pred] = this.__annotate(target[0], getKeys(filter_data[pred]), filter_data[pred])
+                        data[pred] = self.__annotate(target[0], getKeys(filter_data[pred]), filter_data[pred])
                 }
                 else if (getType(target) == "object"){
                     if (filter_data[pred] == null)
                         data[pred] = null
                     else
-                        data[pred] = this.__annotate(target, getKeys(filter_data[pred]), filter_data[pred])[0]
+                        data[pred] = self.__annotate(target, getKeys(filter_data[pred]), filter_data[pred])[0]
                 }
                 else if (target == null) {
                     if (pred == "id") {
                         data[pred] = node["ids"][0];
-                        continue;
+                        return;
                     }
                     var forelinks = node["links"][pred];
                     if (forelinks != null){
                         //ids
                         if (forelinks.length == 1)
-                            data[pred] = this.nodes[forelinks[0]]["ids"][0];
+                            data[pred] = self.nodes[forelinks[0]]["ids"][0];
                         else {
                             var temp_array = [];
-                            for (var x in forelinks)
-                                temp_array.push(this.nodes[x]['ids'][0])
+                            pyForEach(forelinks, function(x) {
+                                temp_array.push(self.nodes[x]['ids'][0])
+                            })
                             data[pred] = temp_array;
                         }
-                        continue;
+                        return;
                     }
                     forelinks = node["literal_links"][pred];
                     if (forelinks != null) {
@@ -609,18 +676,18 @@
                             data[pred] = forelinks[0]
                         else
                             data[pred] = Array.prototype.slice.call(forelinks);
-                        continue;
+                        return;
                     }
                     data[pred] = null;
                 }
                 else
                     throw new Error('QueryException()');
-            }
+            })
             
         // This is the block needed to call out into an adapter. Could be taken out
         // to simplify the MQL implementation
             if (foreign_keys) {
-                for (var pred in q()) {
+                for (var pred in q) {
                     var target = q[pred];
                     var reverse = false;
                     var barepred = pred;
@@ -631,13 +698,13 @@
                     var t = this.ns_split_id(barepred);
                     if (getType(target) === "string" || getType(target) === 'number') {
                         data[pred] = target;
-                        continue;
+                        return;
                     }
                     if (t === null)
-                        continue;
+                        return;
                     var ns = t[0]; var predicate = t[1];
                     if (predicate == "id") {
-                        t = this.ns_ids[ns][x]
+                         t = self.ns_ids[ns][x]
                         if (t == null) {
                             data[pred] = null
                             if (target == [])
@@ -645,19 +712,20 @@
                         }
                         if (t != null) {
                             var temp_array = [];
-                            for (var x in t)
-                                temp_array.push(this.ns_split_id(x)[1]);
+                            pyForEach(t, function(x) {
+                                temp_array.push(self.ns_split_id(x)[1]);
+                            })
                             data[pred] = temp_array;
                             if (target == null)
                                 data[pred] = data[pred][0]
                         }
-                        continue;
+                        return;
                     }
-                    data[pred] = this.ns[ns].annotate(predicate, x, filter_data[pred], reverse=reverse)
+                    data[pred] = self.ns[ns].annotate(predicate, x, filter_data[pred], reverse=reverse)
                 }
             }
             output.push(data)
-        }
+        })
         return output;
     }
     // Here ends the hacky, hacky MQL implementation
@@ -670,65 +738,67 @@
     }
     
     TripleStore.prototype.load_json = function(json) {
-        this.__json_id = 0;
+        var self = this;
         if (isArray(json))
-            for (var x in json)
-                this.__json_load_helper(json[x]);
+            pyForEach(json, function(x) {
+                self.__json_load_helper(x);
+            })
         else if (getType(json) === "object")
             this.__json_load_helper(json);
     }
     TripleStore.prototype.__json_load_helper = function(json) {
         var node;
-        if ("id" in json)
+        var self = this;
+        if (pyIn("id", json))
             node = this.add_node(json["id"])
         else
             node = this.add_node(this.__generate_json_id())
  
-        for (var k in json) {
+        pyForEach(json, function(k) {
             var v = json[k];
-            var t = this.ns_split_id(k)
+            var t = self.ns_split_id(k)
             if (t != null) {
                 var ns = t[0]; var pred = t[1];
                 if (pred === "id") {
                     //only IDs for now
-                    if (this.ns[ns] == null)
-                        this.add_ns_adapter(ns, NullAdapter)
-                    this.__add_ns_id_for_node(ns, v, this.ids[node])
+                    if (self.ns[ns] == null)
+                        self.add_ns_adapter(ns, NullAdapter)
+                    self.__add_ns_id_for_node(ns, v, self.ids[node])
                 }
             }
             else {
                 if (isArray(v)) {
-                    for (var target in v) {
+                    pyForEach(v, function(target) {
                         if (getType(target) === "object") {
-                            t = this.__json_load_helper(target)
-                            this.add_link([node, k, t])
+                            t = self.__json_load_helper(target)
+                            self.add_link([node, k, t])
                         }
                         else if (isArray(target))
                             throw new Error('JSONLoadException()');
                         else {
                             if (target.charAt(0) === ":")
-                                target = this.add_node(target)
-                            this.add_link([node, k, target])
+                                target = self.add_node(target)
+                            self.add_link([node, k, target])
                         }
-                    }
+                    })
                 }
                 else if (getType(v) === "object") {
-                    t = this.__json_load_helper(v)
-                    this.add_link([node, k, t])
+                    t = self.__json_load_helper(v)
+                    self.add_link([node, k, t])
                 }
                 else if (v == null)
-                    continue
+                    return; //i.e. continue
                 else if (getType(v) === 'number')
-                    this.add_link([node, k, v])
+                    self.add_link([node, k, v])
                 else {
                     if (k === "id")
-                        continue
+                        return; //i.e. continue
                     if (v.charAt(0) === ":")
-                        v = this.add_node(v)
-                    this.add_link([node, k, v])
+                        v = self.add_node(v)
+                    self.add_link([node, k, v])
                 }
             }
-        }
+        })
         
         return node;
     }
